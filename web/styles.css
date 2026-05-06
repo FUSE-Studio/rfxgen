@@ -1,0 +1,435 @@
+:root {
+  --bg: #d8d8d8;
+  --panel: #e8e8e8;
+  --border: #1a1a1a;
+  --ink: #111;
+  --muted: #555;
+  --accent: #9ddc7a;
+  --accent-ink: #0a3a05;
+  --slider-track: #c8c8c8;
+  --slider-fill: #2a2a2a;
+  --display-bg: #000;
+  --display-fg: #fff;
+  --disabled: #aaa;
+}
+
+* { box-sizing: border-box; }
+
+[x-cloak] { display: none !important; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* ===================== Layout ====================== */
+.layout {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 18px;
+  max-width: 1100px;
+  width: 100%;
+}
+
+.presets {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.panel {
+  border: 2px solid var(--border);
+  background: var(--panel);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ===================== Preset buttons ====================== */
+.preset-btn {
+  font: 700 18px/1 "Inter", system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  background: var(--panel);
+  color: var(--ink);
+  border: 2px solid var(--border);
+  padding: 14px 20px;
+  cursor: pointer;
+  text-align: center;
+  min-width: 130px;
+  transition: background 0.1s, transform 0.05s;
+}
+.preset-btn:hover:not(:disabled) { background: #f4f4f4; }
+.preset-btn:active:not(:disabled) { transform: translateY(1px); }
+.preset-btn.active {
+  background-color: var(--accent);
+  color: var(--accent-ink);
+}
+/* Active preset: marching-ants border to imply "click again to re-roll".
+   Built from four animated linear-gradient strips (one per side) painting
+   onto the border-box. Avoid the `background` shorthand here and in the
+   hover state — it would reset background-image and kill the dashes. */
+.preset-btn.active:hover:not(:disabled) {
+  background-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 800;
+  border-color: transparent;
+  background-image:
+    linear-gradient(90deg, var(--accent-ink) 50%, transparent 50%),
+    linear-gradient(90deg, var(--accent-ink) 50%, transparent 50%),
+    linear-gradient(0deg,  var(--accent-ink) 50%, transparent 50%),
+    linear-gradient(0deg,  var(--accent-ink) 50%, transparent 50%);
+  background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
+  background-position: 0 0, 0 100%, 0 0, 100% 0;
+  background-size: 12px 2px, 12px 2px, 2px 12px, 2px 12px;
+  background-origin: border-box;
+  background-clip: border-box;
+  animation: preset-march 0.6s linear infinite;
+}
+@keyframes preset-march {
+  to { background-position: 12px 0, -12px 100%, 0 -12px, 100% 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .preset-btn.active { animation: none; }
+}
+.preset-btn:disabled { color: var(--disabled); cursor: not-allowed; }
+
+/* ===================== Top row: wave shape + ADSR ====================== */
+.top-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 18px;
+}
+
+.block {
+  border: 2px solid var(--border);
+  padding: 14px;
+  background: var(--panel);
+}
+
+.block h2 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.note-heading { margin-top: 14px; }
+
+/* Wave shape buttons */
+.wave-buttons { display: flex; gap: 8px; }
+.wave-btn {
+  width: 56px;
+  height: 44px;
+  border: 2px solid var(--border);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.wave-btn:hover:not(:disabled) { background: #f4f4f4; }
+.wave-btn.active { border-color: var(--accent-ink); outline: 2px solid var(--accent); outline-offset: -4px; }
+.wave-btn svg { width: 32px; height: 24px; }
+.wave-btn:disabled { color: var(--disabled); cursor: not-allowed; }
+
+/* Note keyboard */
+.note-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.keyboard {
+  width: 220px;
+  height: 100px;
+  cursor: pointer;
+  user-select: none;
+}
+.keyboard .key { stroke: var(--border); stroke-width: 1.5; transition: fill 0.1s; }
+.keyboard .key-white { fill: #f6f6f6; }
+.keyboard .key-black { fill: #1a1a1a; }
+.keyboard .key:hover { fill: #d4f0c4; }
+.keyboard .key.selected { fill: var(--accent); }
+.keyboard .key-black.selected { fill: var(--accent); stroke: var(--accent-ink); }
+
+.octave-selector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.octave-btn {
+  width: 40px;
+  height: 28px;
+  border: 2px solid var(--border);
+  background: var(--panel);
+  cursor: pointer;
+  font-size: 12px;
+  display: grid;
+  place-items: center;
+}
+.octave-btn:hover:not(:disabled) { background: #f4f4f4; }
+.octave-btn:disabled { color: var(--disabled); cursor: not-allowed; }
+.octave-label {
+  font: 700 18px/1 ui-monospace, "SF Mono", Menlo, monospace;
+  border: 2px solid var(--border);
+  padding: 6px 14px;
+  background: var(--panel);
+  min-width: 56px;
+  text-align: center;
+}
+
+/* ===================== ADSR ====================== */
+.adsr {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 280px;
+}
+.adsr-sliders {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 8px 4px;
+}
+.env-slider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.env-label {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+/* Vertical sliders: lean on the modern writing-mode pattern + browser default
+   appearance. Custom thumb/track styles below are scoped to .row so they don't
+   bleed onto these (Firefox renders the combination unusably). */
+.env-slider input[type=range] {
+  writing-mode: vertical-lr;
+  direction: rtl;     /* flips so up = max */
+  width: 24px;
+  height: 100px;
+}
+.env-value {
+  font: 700 11px/1 ui-monospace, "SF Mono", Menlo, monospace;
+  min-width: 30px;
+  text-align: center;
+  color: var(--ink);
+}
+.env-display {
+  width: 100%;
+  height: 90px;
+  border: 1.5px solid var(--border);
+  background: #fff;
+  display: block;
+}
+
+/* ===================== Slider sections ====================== */
+.sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 130px 1fr 70px;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.section-toggle {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  font-size: 18px;
+  text-align: left;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.section-toggle .caret { font-size: 10px; }
+
+.section-label {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.adv-label {
+  font-size: 13px;
+  color: var(--muted);
+  padding-left: 18px;
+}
+
+/* Custom horizontal slider chrome — scoped to .row so vertical ADSR sliders
+   keep their browser-native rendering (custom track/thumb breaks Firefox's
+   vertical layout). */
+.row input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+.row input[type=range]::-webkit-slider-runnable-track {
+  height: 16px;
+  background: var(--slider-track);
+  border: 1.5px solid var(--border);
+}
+.row input[type=range]::-moz-range-track {
+  height: 16px;
+  background: var(--slider-track);
+  border: 1.5px solid var(--border);
+}
+.row input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 6px;
+  height: 24px;
+  background: var(--slider-fill);
+  border: 1.5px solid var(--border);
+  margin-top: -5px;
+}
+.row input[type=range]::-moz-range-thumb {
+  width: 6px;
+  height: 24px;
+  background: var(--slider-fill);
+  border: 1.5px solid var(--border);
+  border-radius: 0;
+}
+
+input.value {
+  font: 700 13px/1 ui-monospace, "SF Mono", Menlo, monospace;
+  border: 1.5px solid var(--border);
+  background: var(--panel);
+  padding: 5px 6px;
+  width: 100%;
+  text-align: right;
+}
+input.value:disabled { color: var(--disabled); }
+input[type=range]:disabled { cursor: not-allowed; opacity: 0.5; }
+
+.advanced {
+  margin-top: 2px;
+}
+
+/* ===================== Bottom row ====================== */
+.bottom-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.play-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.play-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 2.5px solid var(--border);
+  background: var(--panel);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+}
+.play-btn:hover:not(:disabled) { background: #f4f4f4; }
+.play-btn:disabled { color: var(--disabled); cursor: not-allowed; opacity: 0.6; }
+.play-btn svg { width: 32px; height: 32px; }
+
+.play-on-change {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.wave-display {
+  width: 100%;
+  height: 100px;
+  border: 1.5px solid var(--border);
+  background: var(--display-bg);
+  display: block;
+}
+
+.export-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+}
+
+.icon-btn {
+  width: 44px;
+  height: 36px;
+  border: 2px solid var(--border);
+  background: var(--panel);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font: 700 22px/1 ui-sans-serif;
+  color: var(--ink);
+}
+.icon-btn:hover:not(:disabled) { background: #f4f4f4; }
+.icon-btn:disabled { color: var(--disabled); cursor: not-allowed; opacity: 0.6; }
+.icon-btn svg { width: 22px; height: 22px; }
+
+/* ===================== Status overlay ====================== */
+.status {
+  position: fixed;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--panel);
+  border: 2px solid var(--border);
+  padding: 8px 14px;
+  font-size: 13px;
+}
+.status .error { color: #b00; }
+
+/* ===================== Responsive ====================== */
+@media (max-width: 720px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+  .presets {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .preset-btn { min-width: 100px; padding: 10px 14px; font-size: 14px; }
+  .top-row { grid-template-columns: 1fr; }
+  .row { grid-template-columns: 90px 1fr 60px; gap: 8px; }
+  .adsr { min-width: 0; }
+}
