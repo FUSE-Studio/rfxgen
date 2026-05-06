@@ -6,9 +6,9 @@
 #   source ~/emsdk/emsdk_env.sh
 #
 # Targets:
-#   make           - build dist/rfxgen-engine.mjs (+.wasm)
+#   make           - build dist/rfxgen-engine.mjs and copy rfxgen.ico
 #   make test      - build then run the node test suite
-#   make clean     - remove dist/
+#   make clean     - remove all build artifacts
 
 EMCC ?= emcc
 
@@ -52,7 +52,7 @@ LDFLAGS := \
 
 .PHONY: all clean test
 
-all: $(ENGINE_MJS)
+all: $(ENGINE_MJS) rfxgen.ico
 
 $(ENGINE_MJS): wasm_bindings.c ../src/rfxgen.h | $(OUT_DIR)
 	$(EMCC) $(CFLAGS) wasm_bindings.c $(LDFLAGS) -o $@
@@ -60,8 +60,13 @@ $(ENGINE_MJS): wasm_bindings.c ../src/rfxgen.h | $(OUT_DIR)
 $(OUT_DIR):
 	mkdir -p $(OUT_DIR)
 
-test: $(ENGINE_MJS)
+# Mirror the favicon next to index.html so it loads in dev (any static server)
+# without a path-traversal hack. Canonical source stays in src/.
+rfxgen.ico: ../src/rfxgen.ico
+	cp $< $@
+
+test: all
 	node --test test.mjs notes.test.mjs audio.test.mjs wav.test.mjs
 
 clean:
-	rm -rf $(OUT_DIR)
+	rm -rf $(OUT_DIR) rfxgen.ico

@@ -22,26 +22,20 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment || github.ref_name }}
 
-    env:
-      RAYLIB_CONFIG_FLAGS: "-DSUPPORT_MODULE_RSHAPES -DSUPPORT_MODULE_RTEXTURES -DSUPPORT_MODULE_RTEXT -DSUPPORT_MODULE_RAUDIO -DSUPPORT_EVENTS_WAITING -DSUPPORT_COMPRESSION_API -DSUPPORT_SCREEN_CAPTURE -DSUPPORT_IMAGE_EXPORT -DSUPPORT_FILEFORMAT_PNG -DSUPPORT_QUADS_DRAW_MODE -DSUPPORT_IMAGE_MANIPULATION -DSUPPORT_DEFAULT_FONT -DSUPPORT_TEXT_MANIPULATION -DSUPPORT_FILEFORMAT_WAV -DSUPPORT_FILEFORMAT_QOA -DSUPPORT_STANDARD_FILEIO -DSUPPORT_TRACELOG"
-
     steps:
       - name: Checkout rfxgen
         uses: actions/checkout@v4
-        with:
-          path: rfxgen
-
-      - name: Checkout raylib
-        uses: actions/checkout@v4
-        with:
-          repository: raysan5/raylib
-          path: raylib
 
       - name: Setup emsdk
         uses: mymindstorm/setup-emsdk@v14
         with:
-          version: 5.0.3
+          # Match the local Homebrew formula version. Bump in lockstep when
+          # contributors upgrade — confirm with `emcc --version` locally first.
+          version: 5.0.7
           actions-cache-folder: 'emsdk-cache'
+
+      - name: Build & test web bundle
+        run: make -C web test
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -50,41 +44,13 @@ jobs:
           role-session-name: GitHubActions-rfxgen
           aws-region: us-east-2
 
-      # The upstream rfxgen + raylib Makefiles unconditionally do
-      #   export PATH = $(EMSDK_PATH);$(EMSCRIPTEN_PATH);...
-      # using Windows-style ';' separators, which mangles PATH on Linux and
-      # hides emcc from sub-shells. Overriding PATH on the make command line
-      # wins over the Makefile's `=` assignment, keeping the runner's PATH
-      # (with emcc added by setup-emsdk) intact — without patching upstream.
-      - name: Build raylib (web)
-        working-directory: raylib/src
+      - name: Assemble deploy bundle
         run: |
-          make PLATFORM=PLATFORM_WEB \
-            RAYLIB_BUILD_MODE=RELEASE \
-            RAYLIB_LIBTYPE=STATIC \
-            RAYLIB_CONFIG_FLAGS="${RAYLIB_CONFIG_FLAGS}" \
-            PATH="$PATH" \
-            -B
-
-      - name: Build rfxgen (web)
-        working-directory: rfxgen/src
-        run: |
-          make PLATFORM=PLATFORM_WEB \
-            BUILD_MODE=RELEASE \
-            PROJECT_SOURCE_FILES=rfxgen.c \
-            PROJECT_BUILD_PATH=. \
-            RAYLIB_PATH=../../raylib \
-            PATH="$PATH" \
-            -B
-
-      - name: Assemble dist
-        run: |
-          mkdir -p dist
-          cp rfxgen/src/rfxgen.js rfxgen/src/rfxgen.wasm dist/
-          cp rfxgen/src/rfxgen.html dist/index.html
-          cp rfxgen/src/rfxgen.ico dist/
-          [ -f rfxgen/src/rfxgen.data ] && cp rfxgen/src/rfxgen.data dist/ || true
-          ls -la dist
+          mkdir -p deploy/dist
+          cp web/index.html web/styles.css web/rfxgen.ico deploy/
+          cp web/app.mjs web/bridge.mjs web/audio.mjs web/wav.mjs web/notes.mjs deploy/
+          cp web/dist/rfxgen-engine.mjs deploy/dist/
+          ls -laR deploy
 
       - name: Resolve satellite bucket from SSM
         run: |
@@ -95,4 +61,12 @@ jobs:
 
       - name: Push to S3
         run: |
-          aws s3 sync dist/ "s3://${SATELLITE_BUCKET}/rfxgen/" --delete
+          aws s3 sync deploy/ "s3://${SATELLITE_BUCKET}/rfxgen/" --delete
+          # .mjs isn't in Python's default mimetypes DB, so the AWS CLI uploads
+          # them as application/octet-stream — and browsers refuse to import
+          # ESM modules with that content-type. Fix the metadata in place.
+          aws s3 cp \
+            "s3://${SATELLITE_BUCKET}/rfxgen/" \
+            "s3://${SATELLITE_BUCKET}/rfxgen/" \
+            --recursive --exclude '*' --include '*.mjs' \
+            --content-type 'text/javascript' --metadata-directive REPLACE
