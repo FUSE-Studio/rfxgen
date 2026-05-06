@@ -31,7 +31,7 @@
     <meta name="twitter:description" content="A simple and easy-to-use fx sounds generator">
     
     <!-- Favicon -->
-    <link rel="shortcut icon" href="https://www.raylibtech.com/rfxgen/rfxgen.ico">
+    <link rel="shortcut icon" href="rfxgen.ico">
     <style>
         body { font-family: arial; margin: 0px; background-color: black; padding: none; overflow: hidden; }
         .emscripten { padding-right: 0; margin-left: auto; margin-right: auto; display: block; }
@@ -40,22 +40,20 @@
         /* NOTE: Canvas *must not* have any border or padding, or mouse coords will be wrong */
         canvas.emscripten { border: 0px none; background: black; height: 100vh; width: 100vw; }
     </style>
-    <script type='text/javascript' src="https://cdn.jsdelivr.net/gh/eligrey/FileSaver.js/dist/FileSaver.min.js"> </script>
     <script type='text/javascript'>
         function saveFileFromMEMFSToDisk(memoryFSname, localFSname)     // This can be called by C/C++ code
         {
-            var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
             var data = FS.readFile(memoryFSname);
-            var blob;
-
-            if (isSafari) blob = new Blob([data.buffer], { type: "application/octet-stream" });
-            else blob = new Blob([data.buffer], { type: "application/octet-binary" });
-
-            // NOTE: SaveAsDialog is a browser setting. For example, in Google Chrome,
-            // in Settings/Advanced/Downloads section you have a setting:
-            // 'Ask where to save each file before downloading' - which you can set true/false.
-            // If you enable this setting it would always ask you and bring the SaveAsDialog
-            saveAs(blob, localFSname);
+            var blob = new Blob([data.buffer], { type: "application/octet-stream" });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement("a");
+            a.href = url;
+            a.download = localFSname;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            // Revoke after the click has been dispatched; some browsers need a tick.
+            setTimeout(function() { URL.revokeObjectURL(url); }, 0);
         }
     </script>
     </head>

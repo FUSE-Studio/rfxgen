@@ -82,6 +82,7 @@ jobs:
           mkdir -p dist
           cp rfxgen/src/rfxgen.js rfxgen/src/rfxgen.wasm dist/
           cp rfxgen/src/rfxgen.html dist/index.html
+          cp rfxgen/src/rfxgen.ico dist/
           [ -f rfxgen/src/rfxgen.data ] && cp rfxgen/src/rfxgen.data dist/ || true
           ls -la dist
 
