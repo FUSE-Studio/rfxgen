@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rFXGen | sound effects generator</title>
+  <link rel="icon" href="./rfxgen.ico">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.mjs"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body x-data="rfxgen" x-cloak>
+  <main class="layout" :class="{ loading: !ready }">
+
+    <!-- ============================ Preset column ============================ -->
+    <aside class="presets" aria-label="Sound presets">
+      <template x-for="p in PRESET_BUTTONS" :key="p.id">
+        <button type="button"
+                class="preset-btn"
+                :class="{ active: currentPreset === p.id }"
+                :disabled="!ready"
+                @click="applyPreset(p)"
+                x-text="p.label"></button>
+      </template>
+    </aside>
+
+    <!-- ============================ Main panel ============================== -->
+    <section class="panel">
+
+      <!-- Top row: wave shape + ADSR ----------------------------------------- -->
+      <div class="top-row">
+        <div class="block wave-shape">
+          <h2>Sound Wave Shape</h2>
+          <div class="wave-buttons">
+            <template x-for="w in WAVE_SHAPES" :key="w.value">
+              <button type="button"
+                      class="wave-btn"
+                      :class="{ active: params.waveTypeValue === w.value }"
+                      :disabled="!ready"
+                      :aria-label="w.label"
+                      @click="setWave(w.value)">
+                <svg viewBox="0 0 32 24" aria-hidden="true">
+                  <!-- Square -->
+                  <path x-show="w.value === 0" d="M2 18 H10 V6 H22 V18 H30" fill="none" stroke="currentColor" stroke-width="2.5"/>
+                  <!-- Sawtooth -->
+                  <path x-show="w.value === 1" d="M2 18 L10 6 L20 18 L30 6" fill="none" stroke="currentColor" stroke-width="2.5"/>
+                  <!-- Sine -->
+                  <path x-show="w.value === 2" d="M2 12 Q8 0 15 12 T30 12" fill="none" stroke="currentColor" stroke-width="2.5"/>
+                  <!-- Noise (random vertical bars). 7 lines spread across x=2..30
+                       to match the other icons' bounding box. Heights preserved. -->
+                  <g x-show="w.value === 3" stroke="currentColor" stroke-width="2">
+                    <line x1="2"  y1="12" x2="2"  y2="6"/>
+                    <line x1="6"  y1="12" x2="6"  y2="18"/>
+                    <line x1="11" y1="12" x2="11" y2="9"/>
+                    <line x1="16" y1="12" x2="16" y2="20"/>
+                    <line x1="21" y1="12" x2="21" y2="4"/>
+                    <line x1="26" y1="12" x2="26" y2="16"/>
+                    <line x1="30" y1="12" x2="30" y2="8"/>
+                  </g>
+                </svg>
+              </button>
+            </template>
+          </div>
+
+          <!-- Note keyboard -->
+          <h2 class="note-heading">Note</h2>
+          <div class="note-row">
+            <!-- Hard-coded rather than x-for: Alpine's <template> can't host SVG
+                 children because it clones them in the HTML namespace. -->
+            <svg class="keyboard" viewBox="0 0 98 60" preserveAspectRatio="xMidYMid meet">
+              <rect class="key key-white" :class="{selected: currentNote.name === 'C'}"  @click="setNote('C')"  x="0"  y="0" width="14" height="60"/>
+              <rect class="key key-white" :class="{selected: currentNote.name === 'D'}"  @click="setNote('D')"  x="14" y="0" width="14" height="60"/>
+              <rect class="key key-white" :class="{selected: currentNote.name === 'E'}"  @click="setNote('E')"  x="28" y="0" width="14" height="60"/>
+              <rect class="key key-white" :class="{selected: currentNote.name === 'F'}"  @click="setNote('F')"  x="42" y="0" width="14" height="60"/>
+              <rect class="key key-white" :class="{selected: currentNote.name === 'G'}"  @click="setNote('G')"  x="56" y="0" width="14" height="60"/>
+              <rect class="key key-white" :class="{selected: currentNote.name === 'A'}"  @click="setNote('A')"  x="70" y="0" width="14" height="60"/>
+              <rect class="key key-white" :class="{selected: currentNote.name === 'B'}"  @click="setNote('B')"  x="84" y="0" width="14" height="60"/>
+              <rect class="key key-black" :class="{selected: currentNote.name === 'C#'}" @click="setNote('C#')" x="10" y="0" width="8"  height="38"/>
+              <rect class="key key-black" :class="{selected: currentNote.name === 'D#'}" @click="setNote('D#')" x="24" y="0" width="8"  height="38"/>
+              <rect class="key key-black" :class="{selected: currentNote.name === 'F#'}" @click="setNote('F#')" x="52" y="0" width="8"  height="38"/>
+              <rect class="key key-black" :class="{selected: currentNote.name === 'G#'}" @click="setNote('G#')" x="66" y="0" width="8"  height="38"/>
+              <rect class="key key-black" :class="{selected: currentNote.name === 'A#'}" @click="setNote('A#')" x="80" y="0" width="8"  height="38"/>
+            </svg>
+            <div class="octave-selector">
+              <button type="button" class="octave-btn"
+                      :disabled="!ready || currentNote.octave >= MAX_OCTAVE"
+                      @click="bumpOctave(1)" aria-label="Octave up">▲</button>
+              <span class="octave-label" x-text="octaveLabel()"></span>
+              <button type="button" class="octave-btn"
+                      :disabled="!ready || currentNote.octave <= MIN_OCTAVE"
+                      @click="bumpOctave(-1)" aria-label="Octave down">▼</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADSR -->
+        <div class="block adsr">
+          <div class="adsr-sliders">
+            <template x-for="env in [
+              { label: 'attack',  field: 'attackTimeValue' },
+              { label: 'decay',   field: 'decayTimeValue' },
+              { label: 'sustain', field: 'sustainTimeValue' },
+              { label: 'punch',   field: 'sustainPunchValue' },
+            ]" :key="env.field">
+              <div class="env-slider">
+                <span class="env-label" x-text="env.label"></span>
+                <input type="range" min="0" max="1" step="any"
+                       x-model.number="params[env.field]"
+                       :disabled="!ready"
+                       @input.debounce.50ms="onParamChange()">
+                <output class="env-value" x-text="formatValue(params[env.field])"></output>
+              </div>
+            </template>
+          </div>
+          <canvas class="env-display" x-ref="envCanvas"></canvas>
+        </div>
+      </div>
+
+      <!-- Sliders ------------------------------------------------------------ -->
+      <div class="sliders">
+        <template x-for="section in SECTIONS" :key="section.field">
+          <div class="section" x-data="{ open: false }">
+            <div class="row primary">
+              <template x-if="section.advanced.length > 0">
+                <button type="button" class="section-toggle" @click="open = !open"
+                        :aria-expanded="open">
+                  <span x-text="section.label"></span>
+                  <span class="caret" x-text="open ? '▲' : '▼'"></span>
+                </button>
+              </template>
+              <template x-if="section.advanced.length === 0">
+                <span class="section-label" x-text="section.label"></span>
+              </template>
+              <input type="range"
+                     :min="section.min" :max="section.max" step="any"
+                     x-model.number="params[section.field]"
+                     :disabled="!ready"
+                     @input.debounce.50ms="onParamChange()">
+              <input type="number"
+                     :min="section.min" :max="section.max" step="0.01"
+                     x-model.number="params[section.field]"
+                     :disabled="!ready"
+                     @change="onParamChange()"
+                     class="value">
+            </div>
+
+            <div class="advanced" x-show="open" x-transition.duration.150ms>
+              <template x-for="adv in section.advanced" :key="adv.field">
+                <div class="row">
+                  <span class="adv-label" x-text="adv.label"></span>
+                  <input type="range"
+                         :min="adv.min" :max="adv.max" step="any"
+                         x-model.number="params[adv.field]"
+                         :disabled="!ready"
+                         @input.debounce.50ms="onParamChange()">
+                  <input type="number"
+                         :min="adv.min" :max="adv.max" step="0.01"
+                         x-model.number="params[adv.field]"
+                         :disabled="!ready"
+                         @change="onParamChange()"
+                         class="value">
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Bottom row: play / waveform / export ------------------------------- -->
+      <div class="bottom-row">
+        <div class="play-area">
+          <button type="button" class="play-btn"
+                  :disabled="!ready || !waveSamples"
+                  @click="play()" aria-label="Play">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <polygon points="6,4 20,12 6,20" fill="currentColor"/>
+            </svg>
+          </button>
+          <label class="play-on-change">
+            <input type="checkbox" x-model="playOnChange">
+            <span>Play on change</span>
+          </label>
+        </div>
+
+        <canvas class="wave-display" x-ref="waveCanvas"></canvas>
+
+        <div class="export-area">
+          <button type="button" class="icon-btn" @click="addNew()" :disabled="!ready"
+                  aria-label="New sound (open in new tab)">+</button>
+          <button type="button" class="icon-btn" @click="download()"
+                  :disabled="!ready || !waveSamples" aria-label="Download WAV">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3 V15 M7 10 L12 15 L17 10 M5 19 H19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <div class="status" x-show="!ready" x-transition>
+    <span x-show="!error">Loading engine…</span>
+    <span x-show="error" class="error" x-text="error"></span>
+  </div>
+</body>
+</html>

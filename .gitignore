@@ -61,3 +61,5 @@ dkms.conf
 *.js
 !src/minshell.html
 !src/shell.html
+# web/ holds source HTML for the new browser UI, not build artifacts.
+!web/*.html
