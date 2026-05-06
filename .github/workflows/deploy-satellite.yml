@@ -34,6 +34,16 @@ jobs:
           version: 5.0.7
           actions-cache-folder: 'emsdk-cache'
 
+      # setup-emsdk prepends the emsdk root to PATH, which contains a `node/`
+      # SUBDIRECTORY (the bundled node install tree). Shell PATH lookup for
+      # `node` then resolves to that directory and exec fails with "Permission
+      # denied" on Linux. Putting actions/setup-node AFTER prepends a real
+      # node binary's bin dir, which wins the lookup.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Build & test web bundle
         run: make -C web test
 
