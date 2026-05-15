@@ -6,8 +6,9 @@
 #   source ~/emsdk/emsdk_env.sh
 #
 # Targets:
-#   make           - build dist/rfxgen-engine.mjs and copy rfxgen.ico
+#   make           - build dist/rfxgen-engine.mjs
 #   make test      - build then run the node test suite
+#   make serve     - build then serve at http://localhost:8723
 #   make clean     - remove all build artifacts
 
 EMCC ?= emcc
@@ -50,9 +51,11 @@ LDFLAGS := \
   -s "EXPORTED_FUNCTIONS=[$(EXPORTED_FUNCTIONS)]" \
   -s "EXPORTED_RUNTIME_METHODS=[$(EXPORTED_RUNTIME)]"
 
-.PHONY: all clean test
+.PHONY: all clean test serve
 
-all: $(ENGINE_MJS) rfxgen.ico
+PORT ?= 8723
+
+all: $(ENGINE_MJS)
 
 $(ENGINE_MJS): wasm_bindings.c ../src/rfxgen.h | $(OUT_DIR)
 	$(EMCC) $(CFLAGS) wasm_bindings.c $(LDFLAGS) -o $@
@@ -60,13 +63,17 @@ $(ENGINE_MJS): wasm_bindings.c ../src/rfxgen.h | $(OUT_DIR)
 $(OUT_DIR):
 	mkdir -p $(OUT_DIR)
 
-# Mirror the favicon next to index.html so it loads in dev (any static server)
-# without a path-traversal hack. Canonical source stays in src/.
-rfxgen.ico: ../src/rfxgen.ico
-	cp $< $@
-
 test: all
 	node --test test.mjs notes.test.mjs audio.test.mjs wav.test.mjs
+
+# Local dev server. Registers .mjs as text/javascript first — Python's
+# mimetypes DB doesn't always know about .mjs (varies by Python version)
+# and browsers refuse to import ESM modules with octet-stream MIME.
+serve: all
+	@python3 -c "import mimetypes, http.server, socketserver; \
+	mimetypes.add_type('text/javascript', '.mjs'); \
+	print('rfxgen serving at http://localhost:$(PORT)/'); \
+	socketserver.TCPServer(('', $(PORT)), http.server.SimpleHTTPRequestHandler).serve_forever()"
 
 clean:
 	rm -rf $(OUT_DIR) rfxgen.ico

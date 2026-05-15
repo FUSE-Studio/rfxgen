@@ -1,5 +1,14 @@
 # `rFXGen`
 
+## FUSE web additions
+
+### build + serve (also runs make first, so handles fresh clones)
+
+```bash
+make -C web serve
+```
+Then open http://localhost:8723 in a browser.
+
 A simple and easy-to-use fx sounds generator, based on the amazing [Dr.Petter's sfxr](http://www.drpetter.se/project_sfxr.html).
 
 ## What can I do with `rFXGen`?

@@ -57,7 +57,7 @@ jobs:
       - name: Assemble deploy bundle
         run: |
           mkdir -p deploy/dist
-          cp web/index.html web/styles.css web/rfxgen.ico deploy/
+          cp web/index.html web/styles.css web/favicon.png web/fuse-logo.svg web/euxoi.woff2 deploy/
           cp web/app.mjs web/bridge.mjs web/audio.mjs web/wav.mjs web/notes.mjs deploy/
           cp web/dist/rfxgen-engine.mjs deploy/dist/
           ls -laR deploy

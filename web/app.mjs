@@ -9,13 +9,13 @@ import { encodeWav32f } from './wav.mjs';
 import { noteToSf, sfToNearestNote, NOTES } from './notes.mjs';
 
 const PRESET_BUTTONS = [
-  { id: 'coin',      label: 'BEEP!',  method: 'presetCoin' },
-  { id: 'laser',     label: 'ZAP!',   method: 'presetLaser' },
+  { id: 'coin',      label: 'BEEP',   method: 'presetCoin' },
+  { id: 'laser',     label: 'ZAP',    method: 'presetLaser' },
   { id: 'explosion', label: 'BOOM',   method: 'presetExplosion' },
-  { id: 'powerup',   label: 'WOAH!',  method: 'presetPowerup' },
-  { id: 'hit',       label: 'UH OH!', method: 'presetHit' },
-  { id: 'jump',      label: 'WHEE!',  method: 'presetJump' },
-  { id: 'blip',      label: 'BLIP!',  method: 'presetBlip' },
+  { id: 'powerup',   label: 'WOAH',   method: 'presetPowerup' },
+  { id: 'hit',       label: 'UH OH',  method: 'presetHit' },
+  { id: 'jump',      label: 'WHEE',   method: 'presetJump' },
+  { id: 'blip',      label: 'BLIP',   method: 'presetBlip' },
   { id: 'random',    label: 'RANDOM', method: 'presetRandom' },
 ];
 
@@ -66,6 +66,15 @@ function defaultParams() {
   };
 }
 
+function readStoredTheme() {
+  try {
+    const t = localStorage.getItem('rfxgen-theme');
+    return t === 'light' || t === 'dark' ? t : 'system';
+  } catch (_) {
+    return 'system';
+  }
+}
+
 function downloadBlob(bytes, filename, mime = 'application/octet-stream') {
   const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
   const a = document.createElement('a');
@@ -92,14 +101,35 @@ function rfxgenComponent() {
     params: defaultParams(),
     currentNote: { name: 'A', octave: 4 },
     currentPreset: null,
+    // Like currentPreset, but never cleared on slider tweaks. Used for
+    // download filenames so a tweaked BEEP still saves as "sfx-beep.wav" —
+    // it lives in the BEEP neighborhood of the parameter space, even if
+    // the exact values have drifted.
+    lastPreset: PRESET_BUTTONS[0].id,
     playOnChange: true,
     waveSamples: null,
     ready: false,
     error: null,
+    theme: readStoredTheme(),    // 'system' | 'light' | 'dark'
+    // Gate for the active preset's hover wobble. Reset to false on click
+    // (suppresses the cue while the user is still hovering the button they
+    // just clicked); flipped to true by @mouseleave on the active button so
+    // a subsequent re-hover plays the wobble.
+    wobbleArmed: true,
     _regenTimer: null,
 
     // ---- Lifecycle ----
     async init() {
+      // Re-render the canvases when the OS color preference flips while we're
+      // following system. Browser handles the CSS variable swap automatically;
+      // we just need to redraw the JS-painted contents.
+      if (window.matchMedia) {
+        const mq = window.matchMedia('(prefers-color-scheme: light)');
+        mq.addEventListener?.('change', () => {
+          this._drawWave();
+          this._drawEnvelope();
+        });
+      }
       try {
         this.engine = await loadEngine();
         this.engine.seed(Date.now() & 0xffff);
@@ -111,11 +141,32 @@ function rfxgenComponent() {
       }
     },
 
+    // ---- Theme handling ----
+    // Tristate cycle: system → light → dark → system → ...
+    cycleTheme() {
+      const next = { system: 'light', light: 'dark', dark: 'system' };
+      this.theme = next[this.theme] ?? 'system';
+      if (this.theme === 'system') {
+        document.documentElement.removeAttribute('data-theme');
+        try { localStorage.removeItem('rfxgen-theme'); } catch (_) {}
+      } else {
+        document.documentElement.setAttribute('data-theme', this.theme);
+        try { localStorage.setItem('rfxgen-theme', this.theme); } catch (_) {}
+      }
+      // CSS variables are now swapped; redraw canvases that read them in JS.
+      this._drawWave();
+      this._drawEnvelope();
+    },
+
     // ---- Preset / wave / note handlers ----
-    applyPreset(p) {
+    // fromClick=true signals a real user click (vs. the init() seed call) —
+    // only those should suppress the wobble until the cursor cycles away.
+    applyPreset(p, fromClick = false) {
       this.params = this.engine[p.method]();
       this.currentPreset = p.id;
+      this.lastPreset = p.id;
       this.currentNote = sfToNearestNote(this.params.startFrequencyValue);
+      if (fromClick) this.wobbleArmed = false;
       this.regenerate();
     },
 
@@ -173,9 +224,14 @@ function rfxgenComponent() {
 
     download() {
       if (!this.waveSamples) return;
+      // Slugify the most-recently-applied preset's label: "UH OH" → "uh-oh".
+      // We use lastPreset (not currentPreset) so a tweaked BEEP still saves
+      // as "sfx-beep.wav" — the parameter space around BEEP is conceptually
+      // a "beep" even when slightly off the original preset values.
+      const preset = PRESET_BUTTONS.find(p => p.id === this.lastPreset);
+      const slug = preset ? preset.label.toLowerCase().replace(/\s+/g, '-') : 'sound';
       const wav = encodeWav32f(this.waveSamples);
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      downloadBlob(wav, `rfxgen-${stamp}.wav`, 'audio/wav');
+      downloadBlob(wav, `sfx-${slug}.wav`, 'audio/wav');
     },
 
     // Designer hasn't confirmed this button's intent. Best guess: open a fresh tab.
@@ -184,25 +240,31 @@ function rfxgenComponent() {
     },
 
     // ---- Canvas rendering ----
+    // Both canvases leave their pixels transparent so the CSS background of
+    // each <canvas> shows through (set in styles.css). Foreground colors are
+    // read from CSS custom properties at draw time, so theme tweaks
+    // propagate without touching JS.
     _setupCanvas(canvas) {
       const dpr = window.devicePixelRatio || 1;
       const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
+      canvas.width = rect.width * dpr;     // resets all pixels to transparent
       canvas.height = rect.height * dpr;
       const ctx = canvas.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       return { ctx, w: rect.width, h: rect.height };
     },
 
+    _cssVar(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    },
+
     _drawWave() {
       const canvas = this.$refs.waveCanvas;
       if (!canvas) return;
       const { ctx, w, h } = this._setupCanvas(canvas);
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, w, h);
       const samples = this.waveSamples;
       if (!samples?.length) return;
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = this._cssVar('--accent');
       const step = samples.length / w;
       const mid = h / 2;
       for (let x = 0; x < w; x++) {
@@ -227,8 +289,6 @@ function rfxgenComponent() {
       const canvas = this.$refs.envCanvas;
       if (!canvas) return;
       const { ctx, w, h } = this._setupCanvas(canvas);
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(0, 0, w, h);
       const a = Math.max(0.05, this.params.attackTimeValue);
       const s = Math.max(0.05, this.params.sustainTimeValue);
       const d = Math.max(0.05, this.params.decayTimeValue);
@@ -238,7 +298,7 @@ function rfxgenComponent() {
       const peak = h * 0.15;
       const sustainTop = h * (0.15 + p * 0.25);
       const baseline = h * 0.85;
-      ctx.strokeStyle = '#111';
+      ctx.strokeStyle = this._cssVar('--accent');
       ctx.lineWidth = 2;
       ctx.lineJoin = 'round';
       ctx.beginPath();
