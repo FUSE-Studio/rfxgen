@@ -565,7 +565,11 @@ body {
   letter-spacing: 0.02em;
 }
 
-.adv-label {
+/* Class deliberately renamed from `.adv-label` — ad-blocker filter lists
+   (uBlock, AdGuard) match the `adv-` prefix as a heuristic for "advertisement"
+   and hide it with `display: none !important`. Anything starting `ad-`,
+   `adv-`, `banner-`, `sponsor-` is similarly risky. */
+.sub-label {
   font-size: 12px;
   color: var(--accent);
   text-align: right;

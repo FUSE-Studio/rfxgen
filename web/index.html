@@ -241,7 +241,7 @@
             <div class="advanced" x-show="open" x-transition.duration.150ms>
               <template x-for="adv in section.advanced" :key="adv.field">
                 <div class="row">
-                  <span class="adv-label" x-text="adv.label"></span>
+                  <span class="sub-label" x-text="adv.label"></span>
                   <input type="range"
                          :min="adv.min" :max="adv.max" step="0.01"
                          x-model.number="params[adv.field]"
