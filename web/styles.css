@@ -245,25 +245,36 @@ body {
 .preset-btn.active:hover:not(:disabled) {
   border-color: transparent;
 }
-/* `display: inline-block` is required for transform/animation to apply —
-   spans default to inline, where the CSS transforms spec says transforms
-   are silently dropped (the animation ticks but nothing moves). */
-.preset-btn .text { display: inline-block; }
-/* `.wobble-ready` is added by Alpine after the cursor has left the active
-   button at least once — suppresses the wobble on the same hover that
-   triggered activation (so a click doesn't immediately re-prompt itself). */
-.preset-btn.active.wobble-ready:hover:not(:disabled) .text {
-  animation: text-wobble 1s infinite;
+/* Re-roll cue on active presets: refresh icon rendered via CSS mask so it
+   inherits the button's color (via `background-color: currentColor`).
+   Loaded from a separate SVG file — same source can be re-used elsewhere
+   without inlining. Sized in `em` so it scales with the button's font. */
+.preset-btn.active:not(:disabled)::after {
+  content: '';
+  position: absolute;
+  right: 0.5em;
+  top: 50%;
+  margin-top: -0.5em;
+  width: 1em;
+  height: 1em;
+  background-color: currentColor;
+  -webkit-mask: url('./refresh-cw.svg') no-repeat center / contain;
+          mask: url('./refresh-cw.svg') no-repeat center / contain;
 }
-@keyframes text-wobble {
-  0% { transform: rotate(0deg) scale(1); }
-  20%, 80% { transform: rotate(-20deg) scale(1); animation-timing-function: cubic-bezier(0.8, 0, 1, 1); }
-  60% { transform: rotate(20deg) scale(1.15); animation-timing-function: cubic-bezier(0, 0, 0.2, 1); }
-  100% { transform: rotate(0deg) scale(1.10); }
+/* `.wobble-ready` is added by Alpine after the cursor has left the active
+   button at least once — suppresses the spin on the same hover that
+   triggered activation (so a click doesn't immediately re-prompt itself). */
+.preset-btn.active.wobble-ready:hover:not(:disabled)::after {
+  animation: spin-pause 2s linear infinite;
+}
+@keyframes spin-pause {
+  0%   { transform: rotate(0deg); }
+  40%  { transform: rotate(360deg); }
+  100% { transform: rotate(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .preset-btn.active.wobble-ready:hover:not(:disabled) .text { animation: none; }
+  .preset-btn.active.wobble-ready:hover:not(:disabled)::after { animation: none; }
 }
 .preset-btn:disabled { color: var(--hint); cursor: not-allowed; }
 
