@@ -104,8 +104,8 @@
             <polygon points="6,4 20,12 6,20" fill="currentColor"/>
           </svg>
         </button>
-        <button type="button" class="download-btn" @click="download()"
-                :disabled="!ready || !waveSamples" aria-label="Download WAV">
+        <button type="button" class="download-btn" @click="openSaveDialog()"
+                :disabled="!ready || !waveSamples" aria-label="Save WAV">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 3 V15 M7 10 L12 15 L17 10 M5 19 H19" fill="none"
                   stroke="currentColor" stroke-width="2.2"
@@ -262,6 +262,21 @@
 
     </section>
   </main>
+
+  <!-- "Save Sound As" modal. <dialog> handles backdrop, focus trap, and
+       Esc-to-close natively. The <form method="dialog"> pattern would also
+       close on submit, but we want to run JS first (write the file), so we
+       use @submit.prevent and call close() ourselves in confirmSave(). -->
+  <dialog class="save-dialog" x-ref="saveDialog">
+    <form @submit.prevent="confirmSave()">
+      <h3>Save sound as</h3>
+      <input type="text" x-model="saveDialogName" autocomplete="off" spellcheck="false" required>
+      <div class="save-dialog-actions">
+        <button type="button" @click="$refs.saveDialog.close()">Cancel</button>
+        <button type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
 
   <div class="status" x-show="!ready" x-transition>
     <span x-show="!error">Loading engine…</span>

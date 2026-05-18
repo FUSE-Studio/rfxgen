@@ -75,7 +75,23 @@ function readStoredTheme() {
   }
 }
 
-function downloadBlob(bytes, filename, mime = 'application/octet-stream') {
+// Round all numeric fields to 2 decimal places. Engine presets return
+// full-precision floats; the UI displays values from `params` at step=0.01,
+// so the underlying data should match. Ints (randSeed, waveTypeValue)
+// pass through unchanged since Math.round(int*100)/100 === int.
+function roundParams(params) {
+  const out = {};
+  for (const [k, v] of Object.entries(params)) {
+    out[k] = typeof v === 'number' ? Math.round(v * 100) / 100 : v;
+  }
+  return out;
+}
+
+// Anchor-click download. Filename rename happens in our custom <dialog>
+// before this is called, so we don't need showSaveFilePicker's native UI
+// (which would be a redundant second prompt for Chrome users and missing
+// in Safari/Firefox anyway).
+function saveBlob(bytes, filename, mime) {
   const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
   const a = document.createElement('a');
   a.href = url;
@@ -116,6 +132,9 @@ function rfxgenComponent() {
     // just clicked); flipped to true by @mouseleave on the active button so
     // a subsequent re-hover plays the wobble.
     wobbleArmed: true,
+    // The editable filename shown in the "Save Sound As" dialog, bound to
+    // the <input> via x-model. Populated when the user clicks download.
+    saveDialogName: '',
     _regenTimer: null,
 
     // ---- Lifecycle ----
@@ -162,7 +181,7 @@ function rfxgenComponent() {
     // fromClick=true signals a real user click (vs. the init() seed call) —
     // only those should suppress the wobble until the cursor cycles away.
     applyPreset(p, fromClick = false) {
-      this.params = this.engine[p.method]();
+      this.params = roundParams(this.engine[p.method]());
       this.currentPreset = p.id;
       this.lastPreset = p.id;
       this.currentNote = sfToNearestNote(this.params.startFrequencyValue);
@@ -222,16 +241,35 @@ function rfxgenComponent() {
       }
     },
 
-    download() {
+    // Opens the "Save Sound As" dialog with the suggested filename pre-filled.
+    // The filename is based on the most-recently-applied preset's label —
+    // we use lastPreset (not currentPreset) so a tweaked BEEP still suggests
+    // "sfx-beep.wav" — the parameter space around BEEP is conceptually a
+    // "beep" even when slightly off the original preset values.
+    openSaveDialog() {
       if (!this.waveSamples) return;
-      // Slugify the most-recently-applied preset's label: "UH OH" → "uh-oh".
-      // We use lastPreset (not currentPreset) so a tweaked BEEP still saves
-      // as "sfx-beep.wav" — the parameter space around BEEP is conceptually
-      // a "beep" even when slightly off the original preset values.
       const preset = PRESET_BUTTONS.find(p => p.id === this.lastPreset);
       const slug = preset ? preset.label.toLowerCase().replace(/\s+/g, '-') : 'sound';
-      const wav = encodeWav32f(this.waveSamples);
-      downloadBlob(wav, `sfx-${slug}.wav`, 'audio/wav');
+      this.saveDialogName = `sfx-${slug}.wav`;
+      const dlg = this.$refs.saveDialog;
+      dlg.showModal();
+      // Focus the input and select its contents so the user can immediately
+      // type a new name without first clicking inside the field.
+      this.$nextTick(() => {
+        const input = dlg.querySelector('input');
+        input?.focus();
+        input?.select();
+      });
+    },
+
+    confirmSave() {
+      if (!this.waveSamples) return;
+      let name = this.saveDialogName.trim();
+      if (!name) return;
+      // Defensive: re-add .wav if the user stripped the extension.
+      if (!name.toLowerCase().endsWith('.wav')) name += '.wav';
+      saveBlob(encodeWav32f(this.waveSamples), name, 'audio/wav');
+      this.$refs.saveDialog.close();
     },
 
     // Designer hasn't confirmed this button's intent. Best guess: open a fresh tab.
